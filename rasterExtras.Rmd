@@ -1,0 +1,66 @@
+---
+title: "Parallel Raster Operations"
+author: "Rob Harbert"
+date: "5/1/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# rasterExtras: An R library for supporting parallel calculations of high-density geographic data.
+
+Outline: rasterExtras is a set of functions and a development library that is one solution to errors related to large vector allocation when performing raster operations with large datasets. Right now the only two functions that are implemented are gkde(), a 2-dimensional spatial kernel density estimator, and dist2point() a function to calculate the minimum distance of each raster cell to a set of coordinates. These support paralellization and rudimentary RAM management that allows the analysis of very large raster grids and/or matrices containing many coordinates (up to millions of unique coordinates).
+
+### RAM issues
+
+The problem with these calculations arises because both require calculating a distance matrix between every cell in the raster and every point in the coordinates matrix. For example, the 2.5 arcminute WorldClim raster has 31,104,000 cells. If you have even a modest matrix of 10,000 coordinates this will generate a distance matrix of 31,104,000 * 10,000 = 3.11*10^11 (300 billion values) and will require 
+
+```{r, eval=FALSE}
+require(raster)
+require(rasterExtras)
+grid = raster::raster(nrows=3600, ncols=8600, xmn=-180, xmx=180, ymn=-60, ymx=80, vals=NULL) #dimensions of the Worldclim 2.5 arcminute grid
+grid = raster::setValues(grid,values=(as.vector(seq(1:raster::ncell(grid)))))
+points = cbind(
+       c(seq(xmin(grid), xmax(grid), length.out=5000),
+                seq(xmax(grid), xmin(grid), length.out=5000)),
+       c(seq(ymin(grid), ymax(grid), length.out=100),
+                seq(ymin(grid), ymax(grid), length.out=100))
+                )
+
+
+latlon=latlonfromcell(extent = as.vector(extent(grid)), cells=as.vector(seq(1:ncell(grid))), nrow=nrow(grid), ncol=ncol(grid)) #get lat and lon from cell position
+d = distance(points, latlon)  #calculate the distance matrix manually. Next this will be done inside the main functions
+
+
+```
+
+Ok, that didn't work because the vectors in that distance matrix maxed out. The error I got back was "Error: vector memory exhausted (limit reached?)". It will be this or the "cannot allocate vector of size X" version.
+
+So what can we do? Parallelize... Or at least chop the job up and use an apply function linearly. Fortunately all that is wrapped into some functions here. 
+
+### Calculate the minimum distance to points:
+
+For the sake of my laptop lets work with a smaller example and then show a bigger case cooking-show-style at the end with figures.
+
+```{r}
+#The smaller example
+require(raster)
+require(rasterExtras)
+grid = raster::raster(nrows=360, ncols=860, xmn=-180, xmx=180, ymn=-60, ymx=80, vals=NULL)
+grid = raster::setValues(grid,values=(as.vector(seq(1:raster::ncell(grid)))))
+points = cbind(
+       c(seq(xmin(grid), xmax(grid), length.out=5000),
+                seq(xmax(grid), xmin(grid), length.out=5000)),
+       c(seq(ymin(grid), ymax(grid), length.out=100),
+                seq(ymin(grid), ymax(grid), length.out=100))
+                )
+
+di = dist2point(grid, points, parallel=TRUE, maxram = 2, nclus = 4, dist.method='Haversine')
+plot(di, col = viridis::viridis(9))
+```
+
+
+
