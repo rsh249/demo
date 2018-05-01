@@ -16,7 +16,7 @@ Outline: rasterExtras is a set of functions and a development library that is on
 
 ### RAM issues
 
-The problem with these calculations arises because both require calculating a distance matrix between every cell in the raster and every point in the coordinates matrix. For example, the 2.5 arcminute WorldClim raster has 31,104,000 cells. If you have even a modest matrix of 10,000 coordinates this will generate a distance matrix of 31,104,000 * 10,000 = 3.11*10^11 (300 billion values) and will require 
+The problem with these calculations arises because both require calculating a distance matrix between every cell in the raster and every point in the coordinates matrix. For example, the 2.5 arcminute WorldClim raster has 31,104,000 cells. If you have even a modest matrix of 10,000 coordinates this will generate a distance matrix of 31,104,000 * 10,000 = 3.11*10^11 (300 billion values) and will require vectors that are too long for most modern systems.
 
 ```{r, eval=FALSE}
 require(raster)
@@ -41,7 +41,7 @@ Ok, that didn't work because the vectors in that distance matrix maxed out. The 
 
 So what can we do? Parallelize... Or at least chop the job up and use an apply function linearly. Fortunately all that is wrapped into some functions here. 
 
-### Calculate the minimum distance to points:
+### Calculate the minimum distance to points: dist2point
 
 For the sake of my laptop lets work with a smaller example and then show a bigger case cooking-show-style at the end with figures.
 
@@ -64,7 +64,74 @@ points(points, cex=0.01, col='lightgrey') #points are close together, will show 
 
 ```
 
+The figure above is a plot of the minimum distance of each position in this raster to a point in the coordinates matrix 'points' (the grey line). 
+
+### Spatial density estimation: gkde
+
+Here is what it looks like if we are calculating a probability surface instead of minimum distances.
+
+```{r}
+den = gkde(grid, points, parallel=TRUE, maxram = 2, nclus = 4, dist.method='Haversine', bw=1000)
+plot(den, col = viridis::viridis(9))
+points(points, cex=0.01, col='lightgrey') #points are close together, will show up as a faint line
 
 
+```
 
+### eBird
+
+eBird is a massive database of bird observations run out of the Cornell Lab of Ornithology. I was interested in how these functions operate with millions of observations and a relatively high-resolution raster (2.5 arcminutes).
+
+The eBird database was trimmed to look only at the western US and northern Mexico, but still included ~64 million observations.
+
+These jobs were run on a cluster using 24 cores and allocating 128Gb of RAM. Even so each took several days to run.
+
+Distance to eBird observation:
+```{r fig.width=7, fig.align='center', echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("./data/ebird_dist.png")
+ grid.raster(img)
+```
+
+Distance to eBird observation scaled (0,1):
+```{r fig.width=7, fig.align='center', echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("./data/ebird_distscaled.png")
+ grid.raster(img)
+```
+
+Density of eBird: *note that the coloring only shows the highest density localities, mostly cities.
+```{r fig.width=7, fig.align='center', echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("./data/ebird_density.png")
+ grid.raster(img)
+```
+
+Log-likelihood of the eBird sampling probability density: 
+Taking the log of the probability surface allows us to see on an order-of-magnitude scale the pattern of sampling.
+```{r fig.width=7, fig.align='center', echo=FALSE}
+library(png)
+library(grid)
+img <- readPNG("./data/ebird_loglik.png")
+ grid.raster(img)
+```
+
+### Technical notes:
+
+The rasterExtras repository can be found at https://github.com/rsh249/rasterExtras.git and can be downloaded with devtools:
+
+```{r, eval=FALSE}
+devtools::install_git('https://github.com/rsh249/rasterExtras')
+```
+
+Part of what helps rasterExtras run efficiently is a set of C++ functions that do the heavy lifting with calculating distance matrices. This also limits the type of calculations that can be done to Pythagorean and Haversine distances.
+
+There is much to be done with this code still. RAM usage is still a problem in some cases. I want to support MPI for more cluster compute options.
+
+### Summary
+
+rasterExtras is still under development but feel free to make copies for testing on your own data. I have am sure that there are use-cases that I have not accounted for yet and I have not really pushed the limits on dataset size just yet (i.e., Global density estimates for all GBIF records). However, I hope from these examples some will find this code useful.
 
