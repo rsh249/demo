@@ -54,13 +54,17 @@ grid = raster::setValues(grid,values=(as.vector(seq(1:raster::ncell(grid)))))
 points = cbind(
        c(seq(xmin(grid), xmax(grid), length.out=5000),
                 seq(xmax(grid), xmin(grid), length.out=5000)),
-       c(seq(ymin(grid), ymax(grid), length.out=100),
-                seq(ymin(grid), ymax(grid), length.out=100))
+       c(seq(ymin(grid), ymax(grid), length.out=1000),
+                seq(ymin(grid), ymax(grid), length.out=1000))
                 )
 
 di = dist2point(grid, points, parallel=TRUE, maxram = 2, nclus = 4, dist.method='Haversine')
 plot(di, col = viridis::viridis(9))
+points(points, cex=0.01, col='lightgrey') #points are close together, will show up as a faint line
+
 ```
+
+
 
 
 
